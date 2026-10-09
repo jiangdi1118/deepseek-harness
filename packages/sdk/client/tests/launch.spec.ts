@@ -166,4 +166,27 @@ describe('SDK dsh launch resolution', () => {
         .toThrow('declares no dsh executable')
     },
   )
+
+  it('under pkg SEA omits package bin so --profile is selected once', () => {
+    Object.defineProperty(process, 'pkg', { value: {}, configurable: true })
+    try {
+      const launch = resolveDshLaunch({ profile: 'sdk' })
+      expect(launch.command).toBe(process.execPath)
+      expect(launch.args[0]).toBe('--profile')
+      expect(launch.args).toEqual(['--profile', 'sdk'])
+    } finally {
+      Reflect.deleteProperty(process, 'pkg')
+    }
+  })
+
+  it('under pkg SEA invokes explicit dshBin as the command', () => {
+    Object.defineProperty(process, 'pkg', { value: {}, configurable: true })
+    try {
+      const launch = resolveDshLaunch({ dshBin: '/runtime/sea', profile: 'sdk', patches: ['./p.yml'] }, '/tmp/caller')
+      expect(launch.command).toBe('/runtime/sea')
+      expect(launch.args).toEqual(['--profile', 'sdk', '--patch', resolve('/tmp/caller', './p.yml')])
+    } finally {
+      Reflect.deleteProperty(process, 'pkg')
+    }
+  })
 })

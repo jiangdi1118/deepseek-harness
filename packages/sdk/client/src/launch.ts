@@ -125,6 +125,11 @@ function installedDshNodeLaunch(): DshNodeLaunch {
  * @param callerCwd - parent-process directory used for lexical resolution.
  * @returns one generic subprocess spec for the JSON-RPC transport.
  */
+/** True when this process is the @yao-pkg/pkg SEA carrier (embedded dsh CLI). */
+function runningInsidePkgSea(): boolean {
+  return Object.prototype.hasOwnProperty.call(process, 'pkg')
+}
+
 export function resolveDshLaunch(
   options: HarnessClientOptions = {},
   callerCwd: string = process.cwd(),
@@ -138,9 +143,23 @@ export function resolveDshLaunch(
     ...(options.patches ?? []).map(path => resolve(callerCwd, path)),
   ]
   const dshHome = options.dshHome === undefined ? undefined : resolve(callerCwd, options.dshHome)
+  // SEA always re-enters the embedded CLI on process.execPath. Passing the
+  // package bin as argv makes parseDshArgs expand it to a second --profile
+  // ("select a profile only once"). Match the Python SDK: flags only, or an
+  // explicit carrier as the command.
+  let command = process.execPath
+  let prefixArgs = dshLaunch.nodeArgs
+  if (runningInsidePkgSea()) {
+    if (options.dshBin === undefined) {
+      prefixArgs = []
+    } else {
+      command = resolve(callerCwd, options.dshBin)
+      prefixArgs = []
+    }
+  }
   return {
-    command: process.execPath,
-    args: [...dshLaunch.nodeArgs, '--profile', profile, ...patches.flatMap(path => ['--patch', path])],
+    command,
+    args: [...prefixArgs, '--profile', profile, ...patches.flatMap(path => ['--patch', path])],
     ...options.processCwd === undefined ? {} : { cwd: resolve(callerCwd, options.processCwd) },
     environment: () => ({
       ...(options.env ?? process.env),
